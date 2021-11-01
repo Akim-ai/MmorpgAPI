@@ -1,18 +1,14 @@
 from django.db import models
 
-import datetime
+from datetime import datetime
 
 from src.oauth.models import Auth as User
-from HelpCode.models.models import DefaultModel
+from utils.managers import DefaultManager, DeletedManager
+from django.db.models import Manager
 
 
-class Announcement(DefaultModel):
+class Announcement(models.Model):
     """Объявление"""
-    user = models.ForeignKey(User, help_text='Пользователь',
-                             on_delete=models.CASCADE,
-                             verbose_name="Пользователь")
-    title = models.CharField('Заголовок', max_length=150)
-    description = models.TextField('Описание', max_length=1500)
     category_choices = (
         ('Та', 'Танк'),
         ("Хи", "Хил"),
@@ -25,7 +21,26 @@ class Announcement(DefaultModel):
         ("Зе", "Зельевар"),
         ("МЗ", "Мастер заклинаний")
     )
-    category = models.CharField("Категория", max_length=2, choices=category_choices)
+    user = models.ForeignKey(
+        User, help_text='Пользователь',
+        on_delete=models.CASCADE,
+        verbose_name="Пользователь"
+    )
+    title = models.CharField('Заголовок', max_length=150)
+    description = models.TextField('Описание', max_length=1500)
+    category = models.CharField(
+        "Категория", max_length=2,
+        choices=category_choices
+    )
+    create_date = models.DateField(
+        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
+        editable=True
+    )
+    deleted = models.BooleanField(default=False)
+
+    objects = DefaultManager()
+    objects_del = DeletedManager()
+    objects_all = Manager()
 
     def __str__(self):
         return f'{self.title}'
@@ -34,14 +49,22 @@ class Announcement(DefaultModel):
         verbose_name = 'Объявление'
         verbose_name_plural = 'Объявления'
 
+    def delete(self, using=None, keep_parents=False):
+        self.deleted = True
+        self.save()
+        return self
+
 
 def announcement_picture_directory_path(instance, filename):
-    date = datetime.date.today()
-    return 'users/{0}/AnnouncementPicture/{1}/{2}/{3}/{4}'.format(instance.user.id, date.year,
-                                                                  date.month, date.day, filename)
+    date = datetime.today().date()
+    return 'users/{0}/Announcement/{1}/Pictures/{2}/{3}/{4}/{5}'.format(
+        instance.user, instance.announcement,
+        date.year, date.month, date.day,
+        filename
+    )
 
 
-class AnnouncementPicture(DefaultModel):
+class AnnouncementPicture(models.Model):
     """Картинки для объявлений"""
     user = models.ForeignKey(
         User, on_delete=models.CASCADE,
@@ -52,11 +75,20 @@ class AnnouncementPicture(DefaultModel):
         upload_to=announcement_picture_directory_path,
         max_length=255
     )
-    announcement_id = models.ForeignKey(
+    announcement = models.ForeignKey(
         Announcement, on_delete=models.CASCADE,
         verbose_name="Относится к объявлению",
         related_name='pictures'
     )
+    create_date = models.DateField(
+        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
+        editable=True
+    )
+    deleted = models.BooleanField(default=False)
+
+    objects = DefaultManager()
+    objects_del = DeletedManager()
+    objects_all = Manager()
 
     def __str__(self):
         return f'{self.img}'
@@ -65,17 +97,31 @@ class AnnouncementPicture(DefaultModel):
         verbose_name = 'Изображение'
         verbose_name_plural = 'Изображения'
 
+    def delete(self, using=None, keep_parents=False):
+        self.deleted = True
+        self.save()
+        return self
 
-class AnnouncementResponse(DefaultModel):
+
+class AnnouncementResponse(models.Model):
     """Отклики на объявления"""
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField('Сообщение', max_length=1000)
     accepted = models.BooleanField('Одобрен', default=False)
-    announcement_id = models.ForeignKey(
+    announcement = models.ForeignKey(
         Announcement, on_delete=models.CASCADE,
         verbose_name='Относится к объявлению',
         related_name='responses',
     )
+    create_date = models.DateField(
+        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
+        editable=True
+    )
+    deleted = models.BooleanField(default=False)
+
+    objects = DefaultManager()
+    objects_del = DeletedManager()
+    objects_all = Manager()
 
     def __str__(self):
         return self.text[:30]
@@ -84,3 +130,8 @@ class AnnouncementResponse(DefaultModel):
         verbose_name = 'Отклик'
         verbose_name_plural = 'Отклики'
         ordering = ['-accepted']
+
+    def delete(self, using=None, keep_parents=False):
+        self.deleted = True
+        self.save()
+        return self

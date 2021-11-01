@@ -1,16 +1,19 @@
 from django.conf import settings
 from django.urls import path
 
-from .views import (AnnouncementRetrieveListView, AnnouncementPictureView,
-                    AnnouncementResponseListView, AnnouncementResponseCreateView,
-                    ResponseAcceptView, AnnouncementResponseUpdateCreateView,)
+from .views import (
+    AnnouncementListCreateView, AnnouncementPictureView,
+    AnnouncementResponseListCreateView,
+    ResponseAcceptView, AnnouncementResponseDetailView,
+    AnnouncementDetailView,
+    )
+
 
 urlpatterns = [
-    path('', AnnouncementRetrieveListView.as_view(), name='announcement-list'),
-    path('<int:pk>/', AnnouncementRetrieveListView.as_view(), name='announcement-retrieve'),
+    path('', AnnouncementListCreateView.as_view(), name='announcement-list-create'),
+    path('<int:pk>/', AnnouncementDetailView.as_view(), name='announcement-detail'),
     path(settings.URL_ANNOUNCEMENT_PICTURES, AnnouncementPictureView.as_view(), name='announcement-picture'),
-    path('<int:pk>/response/', AnnouncementResponseListView.as_view(), name='announcement-responses'),
-    # path('<int:pk>/response/<int:res_id>/', AnnouncementResponseUpdateCreateView.as_view(), name='response-update'),
-    path('<int:pk>/response-create/', AnnouncementResponseCreateView.as_view(), name='response-create'),
-    path('<int:pk>/response-accept/<int:res_id>', ResponseAcceptView.as_view(), name='response-accept'),
+    path('<int:pk>/response/', AnnouncementResponseListCreateView.as_view(), name='announcement-response'),
+    path('<int:pk>/response/<int:res_id>/', AnnouncementResponseDetailView.as_view(),
+          name='announcement-response-detail'),
 ]

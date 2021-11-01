@@ -5,6 +5,8 @@ from rest_framework import serializers
 
 from django.conf import settings
 
+from datetime import date
+
 
 class CustomUserSerializer(serializers.ModelSerializer):
     """Users Serializer"""
@@ -20,7 +22,11 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
     responses = serializers.SerializerMethodField(method_name='count_responses')
     title = serializers.SerializerMethodField(method_name='title_slice')
     description = serializers.SerializerMethodField(method_name='description_slice')
-    create_date = serializers.SerializerMethodField(method_name='date_format')
+    create_date = serializers.DateField(default=date.today().strftime("%Y-%m-%d"), read_only=True)
+
+    class Meta:
+        model = Announcement
+        exclude = ['deleted', 'user']
 
     def category_translate(self, obj):
         category_choices = {
@@ -41,25 +47,25 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
         return AnnouncementResponse.objects.filter(announcement=obj.id).count()
 
     def title_slice(self, obj):
-        return obj.title[:150]
+        return f'{obj.title[:150]}'
 
     def description_slice(self, obj):
-        return obj.description[:200]
+        return f'{obj.description[:200]}'
 
-    def date_format(self, obj):
-        return obj.published.strftime("%d/%m/%y")
+
+class AnnouncementPictureSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = Announcement
-        exclude = ['deleted', 'user']
+        model = AnnouncementPicture
+        fields = ['img']
 
 
 class AnnouncementRetrieveSerializer(serializers.ModelSerializer):
     """Announcements retrieve/detail serializer"""
-    user = serializers.SlugRelatedField('username', read_only=True)
+    user = serializers.SlugRelatedField('show_display_name', read_only=True)
     category = serializers.SerializerMethodField(method_name='category_translate')
     pictures = serializers.SerializerMethodField(method_name='pictures_path')
-    create_date = serializers.SerializerMethodField(method_name='date_format')
+    create_date = serializers.DateField(default=date.today().strftime("%Y-%m-%d"), read_only=True)
 
     def category_translate(self, obj):
         category_choices = {
@@ -83,45 +89,55 @@ class AnnouncementRetrieveSerializer(serializers.ModelSerializer):
             path = settings.URL_ANNOUNCEMENT_PICTURES.replace('<int:pk>', f'{obj.id}')
             images_urls = []
             for i in range(1, img_count+1):
-                images_urls.append('router/announcement/' + path.replace('<int:img_num>', f'{i}'))
+                images_urls.append('api/v1/announcement/' + path.replace('<int:img_num>', f'{i}'))
             return f'{images_urls}'
         else:
             return None
-
-    def date_format(self, obj):
-        return obj.published.strftime("%d/%m/%y")
 
     class Meta:
         model = Announcement
         exclude = ['deleted']
 
 
-class AnnouncementResponseSerializer(serializers.ModelSerializer):
+class AnnouncementUpdateSerializer(serializers.ModelSerializer):
 
-    user = serializers.SlugRelatedField(slug_field='username', read_only=True)
-    announcement = serializers.SlugRelatedField(slug_field='title', read_only=True)
-    create_date = serializers.DateTimeField(format="%d/%m/%y")
+    user = serializers.SlugRelatedField('show_display_name', read_only=True)
 
     class Meta:
-        model = AnnouncementResponse
-        fields = '__all__'
+        model = Announcement
+        fields = ('title', 'description', 'category', 'user')
 
 
-class ResponseCreateSerializer(serializers.ModelSerializer):
+class AnnouncementCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = AnnouncementResponse
-        fields = ['text', 'create_date']
+        model = Announcement
+        fields = ('title', 'description', 'category', 'user')
+        requires_context = True
 
     def create(self, validated_data):
-        return AnnouncementResponse.objects.create(**validated_data)
+        return Announcement.objects.create(**validated_data)
 
 
-class ResponseUpdateSerializer(serializers.ModelSerializer):
+class AnnouncementResponseListRetrieveSerializer(serializers.ModelSerializer):
+
+    user = serializers.SlugRelatedField(slug_field='show_display_name', read_only=True, required=False)
+    announcement = serializers.SlugRelatedField(slug_field='title', read_only=True)
+    create_date = serializers.DateField(default=date.today().strftime("%Y-%m-%d"), read_only=True)
 
     class Meta:
         model = AnnouncementResponse
-        exclude = ['id', 'accepted', 'user', 'announcement', 'deleted']
+        exclude = ('deleted', )
+
+
+class AnnouncementResponseUpdateSerializer(AnnouncementResponseListRetrieveSerializer):
+
+    user = None
+    announcement = None
+
+    class Meta:
+        model = AnnouncementResponse
+        exclude = ('deleted', 'accepted', 'user', 'id', 'announcement', )
 
     def update(self, instance, validated_data):
         instance.text = validated_data.get('text', instance.text)
@@ -129,16 +145,15 @@ class ResponseUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
-class ResponseDestroySerializer(serializers.ModelSerializer):
+class AnnouncementResponseCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AnnouncementResponse
-        fields = ['deleted']
+        fields = ('user', 'text', 'announcement')
+        required_fields = ('user', 'announcement')
 
-    def update(self, instance, validated_data):
-        instance.deleted = validated_data.get('deleted', instance.deleted)
-        instance.save()
-        return instance
+    def create(self, validated_data):
+        return AnnouncementResponse.objects.create(**validated_data)
 
 
 class ResponseAcceptSerializer(serializers.ModelSerializer):
@@ -152,9 +167,3 @@ class ResponseAcceptSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-
-class AnnouncementPictureSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = AnnouncementPicture
-        fields = ['img']

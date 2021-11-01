@@ -9,7 +9,7 @@ from .models import (
 class AnnouncementAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'user', 'category', 'title',
-        'description', 'create_date', 'deleted'
+        'description', 'create_date'
     ]
 
 
@@ -17,7 +17,7 @@ class AnnouncementAdmin(admin.ModelAdmin):
 class AnnouncementResponseAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'user', 'text', 'create_date',
-        'accepted', 'deleted'
+        'accepted'
     ]
 
 
@@ -25,7 +25,7 @@ class AnnouncementResponseAdmin(admin.ModelAdmin):
 class AnnouncementPictureAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'user', 'announcement', 'img',
-        'create_date', 'deleted'
+        'create_date'
     ]
     list_display_links = [
         'id', 'img'

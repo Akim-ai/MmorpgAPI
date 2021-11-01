@@ -3,13 +3,16 @@ from datetime import datetime
 from django.db import models
 
 from django.contrib.auth.models import AbstractUser
+from django.db.models import Manager
+
 from .managers import CustomUserManager
 
 import uuid
 from django.core.validators import FileExtensionValidator
 
 from .uploading import validate_size_image
-from HelpCode.models.models import DefaultModel
+
+from utils.managers import DefaultManager, DeletedManager
 
 
 class User(AbstractUser):
@@ -62,7 +65,7 @@ class Auth(models.Model):
     display_name = models.CharField(max_length=30, blank=True, null=True)
 
     def __str__(self):
-        return f'{self.email}'
+        return self.show_display_name
 
     class Meta:
         verbose_name = 'Авторизованный пользователь'
@@ -73,14 +76,30 @@ class Auth(models.Model):
         """Способ узнать был ли пользователь аутентифитирован"""
         return True
 
+    @property
+    def show_display_name(self):
+        if self.display_name:
+            return f'{self.display_name}'
+        name = self.email.split('@')[0]
+        return f'{name}'
 
-class Avatar(DefaultModel):
+
+class Avatar(models.Model):
     user = models.ForeignKey(Auth, on_delete=models.PROTECT, related_name='avatar')
     img = models.ImageField(
         upload_to='', blank=True,
         null=True, validators=[FileExtensionValidator(allowed_extensions=['jpg']),
                                validate_size_image]
     )
+    create_date = models.DateField(
+        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
+        editable=True
+    )
+    deleted = models.BooleanField(default=False)
+
+    objects = DefaultManager()
+    objects_del = DeletedManager()
+    objects_all = Manager()
 
     def __str__(self):
         return f'{self.img}'
@@ -89,16 +108,34 @@ class Avatar(DefaultModel):
         verbose_name = 'Аватар пользователя'
         verbose_name_plural = 'Автары пользователей'
 
+    def delete(self, using=None, keep_parents=False):
+        self.deleted = True
+        self.save()
+        return self
+
 
 class Follower(models.Model):
     user = models.ForeignKey(Auth, on_delete=models.CASCADE, related_name='owner')
     subscriber = models.ForeignKey(Auth, on_delete=models.CASCADE, related_name='subscribers')
-    created = models.DateTimeField(auto_now_add=True, editable=True)
+    create_date = models.DateField(
+        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
+        editable=True
+    )
+    deleted = models.BooleanField(default=False)
 
     def __str__(self):
         return f'{self.subscriber} подписан на {self.user}'
 
+    objects = DefaultManager()
+    objects_del = DeletedManager()
+    objects_all = Manager()
+
     class Meta:
         verbose_name = 'Подписка'
         verbose_name_plural = 'Подписки'
+
+    def delete(self, using=None, keep_parents=False):
+        self.deleted = True
+        self.save()
+        return self
 

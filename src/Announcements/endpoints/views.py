@@ -1,116 +1,135 @@
-from ..models import Announcement, AnnouncementResponse, AnnouncementPicture
+from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend, filters
+from rest_framework.generics import (
+    ListAPIView, RetrieveAPIView,
+    UpdateAPIView, CreateAPIView,
+    DestroyAPIView,
+)
 
-from rest_framework.generics import (ListAPIView, RetrieveAPIView,
-                                     UpdateAPIView, CreateAPIView,
-                                     DestroyAPIView)
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from utils.permissions import IsOwnerOrReadOnly, IsOwner
+
 from rest_framework.response import Response
+
 from .custom_renders import JPEGRenderer, PNGRenderer
 from .serializers import (
     AnnouncementListSerializer,
     AnnouncementRetrieveSerializer,
-    AnnouncementResponseSerializer,
-    ResponseUpdateSerializer,
-    ResponseCreateSerializer,
-    ResponseDestroySerializer,
+    AnnouncementResponseListRetrieveSerializer,
+    AnnouncementResponseUpdateSerializer,
+    AnnouncementResponseCreateSerializer,
     ResponseAcceptSerializer,
     AnnouncementPictureSerializer,
+    AnnouncementUpdateSerializer,
+    AnnouncementCreateSerializer,
 )
-from rest_framework.pagination import PageNumberPagination
-
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
-from django.shortcuts import get_object_or_404
+from ..models import Announcement, AnnouncementResponse, AnnouncementPicture
 
 """Image validation"""
 from io import BytesIO
 from PIL import Image
 
 
-class AnnouncementRetrieveListView(RetrieveAPIView, ListAPIView):
-    """Announcements retrieve/list view"""
-
-    permission_classes = [IsAuthenticated]
-    serializer_class = AnnouncementListSerializer
-
-    def get(self, request, *args, **kwargs):
-        context = {}
-        if kwargs:
-            announcement = Announcement.objects.get(id=kwargs['pk'], deleted=False)
-            if announcement:
-                context['announcement'] = AnnouncementRetrieveSerializer(announcement).data
-        else:
-            announcement = Announcement.objects.all()
-            if announcement:
-                context['announcements'] = AnnouncementListSerializer(announcement, many=True).data
-        return Response(context)
-
-
-class AnnouncementResponseListView(ListAPIView):
+class AnnouncementListCreateView(ListAPIView, CreateAPIView):
+    """Announcements list create view"""
 
     permission_classes = [IsAuthenticatedOrReadOnly]
-    pagination_class = PageNumberPagination
-    serializer_class = AnnouncementResponseSerializer
+    filter_backends = [DjangoFilterBackend, ]
+    filterset_fields = ['category', 'title', 'description']
 
     def get_queryset(self):
-        responses = AnnouncementResponse.objects.filter(announcement_id=self.kwargs['pk'], deleted=False)
-        return responses
-
-
-class AnnouncementResponseCreateView(UpdateAPIView, CreateAPIView):
-    """Response Update Create View"""
-
-    http_method_names = ['post']
-    permission_classes = [IsAuthenticated]
+        return Announcement.objects.all().order_by('-create_date', '-id')
 
     def get_serializer_class(self):
-        return ResponseCreateSerializer
+        if self.request.method == 'GET':
+            return AnnouncementListSerializer
+        elif self.request.method == 'POST':
+            return AnnouncementCreateSerializer
 
-    def post(self, request, *args, **kwargs):
-        if Announcement.objects.filter(id=kwargs['pk'], user=request.user, deleted=False):
-            raise Exception("You can't comment announcement created by yourself")
+    def get_serializer(self, *args, **kwargs):
         serializer = self.get_serializer_class()
-        serializer = serializer(data=request.data)
+        if self.request.method == 'POST':
+            data = self.request.data
+            data.pop('user')
+            return serializer(
+                data={**data, 'user': self.request.user.id},
+            )
+        serializer = serializer(data=self.get_queryset(), many=True)
         if serializer.is_valid():
-            text = serializer.data
-            AnnouncementResponse.objects.create(user=request.user,
-                                                text=text.get('text', text),
-                                                announcement_id=kwargs['pk'])
-            return Response(status=200)
-        return Response(exception='Data is not valid')
+            return serializer
+        return serializer
 
 
-class AnnouncementResponseUpdateCreateView(UpdateAPIView, CreateAPIView):
-    """Announcement Response Create Update"""
-    
-    http_method_names = ['post', 'put']
-    permission_classes = [IsAuthenticated]
+class AnnouncementDetailView(RetrieveAPIView, UpdateAPIView, DestroyAPIView):
+    """Announcement Retrieve, Update, Destroy"""
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    serializer_class = AnnouncementRetrieveSerializer
+    http_method_names = ['get', 'put', 'delete']
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return AnnouncementRetrieveSerializer
+        elif self.request.method == 'PUT':
+            return AnnouncementUpdateSerializer
+        else:
+            raise Exception(f'Method {self.request.method} is not allowed')
+
+    def get_object(self):
+        announcement = Announcement.objects.get(id=self.kwargs['pk'])
+        self.check_object_permissions(self.request, announcement)
+        return announcement
+
+
+class AnnouncementResponseListCreateView(ListAPIView, CreateAPIView):
+    """Announcement Resnpose List Create View"""
+
+    http_method_names = ['get', 'post']
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        responses = AnnouncementResponse.objects.filter(announcement_id=self.kwargs.get('pk'), deleted=False)
+        return responses
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
-            return ResponseUpdateSerializer
-        elif self.request.method == 'PUT':
-            return ResponseDestroySerializer
+            return AnnouncementResponseCreateSerializer
+        if self.request.method == "GET":
+            return AnnouncementResponseListRetrieveSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        serializer = self.get_serializer_class()
+        if self.request.method == 'POST':
+            data = self.request.data
+            data.pop('user', None)
+            data.pop('announcement', None)
+            return serializer(
+                data={**data, 'user': self.request.user.id, 'announcement': self.kwargs.get('pk')},
+                many=True
+            )
+        serializer = serializer(data=list(self.get_queryset().values()), many=True)
+        if serializer.is_valid():
+            return serializer
+
+
+class AnnouncementResponseDetailView(UpdateAPIView, RetrieveAPIView, DestroyAPIView):
+    """Announcement Response Create Update"""
+    
+    http_method_names = ['get', 'put', 'delete']
+    permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_serializer_class(self):
+        if self.request.method == 'PUT':
+            return AnnouncementResponseUpdateSerializer
+        elif self.request.method == 'GET':
+            return AnnouncementResponseListRetrieveSerializer
 
     def get_object(self):
-        response = AnnouncementResponse.objects.filter(
+        response = AnnouncementResponse.objects.get(
             id=self.kwargs['res_id'], user=self.request.user,
-            announcement_id=self.kwargs['pk'], deleted=False
+            announcement_id=self.kwargs['pk']
         )
         return response
-
-    def action(self, request, *args, **kwargs):
-        response = self.get_object()
-        serializer = self.get_serializer_class()
-        serializer = serializer(response, data=request.data)
-        if response and serializer.is_valid():
-            serializer.save()
-            return Response(status=200)
-        return Response(status=404)
-
-    def post(self, request, *args, **kwargs):
-        return self.action(request, *args, **kwargs)
-
-    def put(self, request, *args, **kwargs):
-        return self.action(request, *args, **kwargs)
 
 
 class ResponseAcceptView(UpdateAPIView):
@@ -119,11 +138,10 @@ class ResponseAcceptView(UpdateAPIView):
     serializer_class = ResponseAcceptSerializer
 
     def put(self, request, *args, **kwargs):
-        response = get_object_or_404(AnnouncementResponse,
-                                     announcement_id=self.kwargs['pk'],
-                                     id=self.kwargs['res_id'],
-                                     deleted=False,
-                                     announcement__user=self.request.user)
+        response = get_object_or_404(
+            AnnouncementResponse, announcement_id=self.kwargs['pk'],
+            id=self.kwargs['res_id'], announcement__user=self.request.user
+        )
         serializer = self.serializer_class
         serializer = serializer(response, data=request.data)
         if serializer.is_valid():
@@ -144,44 +162,46 @@ class AnnouncementPictureView(RetrieveAPIView, CreateAPIView, UpdateAPIView, Des
     image_min_max_width = [400, 1980]
 
     def get(self, request, *args, **kwargs):
-        queryset = AnnouncementPicture.objects.filter(announcement_id=self.kwargs['pk'], deleted=False)
+        queryset = AnnouncementPicture.objects.filter(
+            announcement_id=self.kwargs['pk'],
+            deleted=False
+        )
         object_num = int(self.kwargs['img_num'])
         if queryset.count() >= object_num:
             return Response(queryset[object_num - 1].img)
         return Response(status=404)
 
     def get_object(self):
-        img = AnnouncementPicture.objects.filter(announcement_id=self.kwargs['pk'],
-                                                 announcement__user=self.request.user,
-                                                 user=self.request.user, deleted=False)
+        img = AnnouncementPicture.objects.filter(
+            announcement_id=self.kwargs['pk'],
+            user=self.request.user, deleted=False
+        )
         if img.count() >= self.kwargs['img_num']:
             return img[self.kwargs['img_num']-1]
-        return ''
+        raise Exception('You not allowed for this method or there is no object.')
 
     def get_serializer_class(self):
         if self.request.method == 'PUT' or self.request.method == 'POST':
             return AnnouncementPictureSerializer
 
     def image_validation(self, image):
-        if 0 < len(str(image)) < 256:
-            if str(image).split('.')[-1] in self.image_input_formats:
-                image_size = Image.open(BytesIO(image.read())).size
-                if self.image_min_max_height[0] < image_size[1] < self.image_min_max_height[1] \
-                        and self.image_min_max_width[0] < image_size[0] < self.image_min_max_width[1]:
-                    return True
-                else:
-                    raise Exception('Invalid image size. Valid height- from {0} to {1}. Valid width- from {2} to {3}'
-                                     .format(self.image_min_max_height[0], self.image_min_max_height[1],
-                                             self.image_min_max_width[0], self.image_min_max_width[1]))
-            else:
-                raise Exception('Invalid image format. Allowed formats: ' + ', '.join(self.image_input_formats))
-        raise Exception('Name of the image must be less then 225 symbols')
+        if 0 < len(str(image)) > 254:
+            raise Exception('Name of the image must be less then 255 symbols')
+        if str(image).split('.')[-1] not in self.image_input_formats:
+            raise Exception('Invalid image format. Allowed formats: ' + ', '.join(self.image_input_formats))
+        image_size = Image.open(BytesIO(image.read())).size
+        if image_size[1] < self.image_min_max_height[0] or image_size[1] > self.image_min_max_height[1] \
+                and image_size[0] < self.image_min_max_width[0] or image_size[0] > self.image_min_max_width[1]:
+            raise Exception('Invalid image size. Valid height- from {0} to {1}. Valid width- from {2} to {3}'
+                            .format(self.image_min_max_height[0], self.image_min_max_height[1],
+                                    self.image_min_max_width[0], self.image_min_max_width[1]))
+        return True
 
     def post(self, request, *args, **kwargs):
         if self.image_validation(request.data['img']):
             announcement = Announcement.objects.get(id=kwargs['pk'])
             if announcement:
-                if announcement.announcementpicture_set.filter(deleted=False).count() <= 10:
+                if announcement.pictures.all().count() <= 10:
                     AnnouncementPicture.objects.create(user=request.user, announcement=announcement,
                                                        img=request.data['img'])
                     return Response(status=201)
@@ -201,10 +221,3 @@ class AnnouncementPictureView(RetrieveAPIView, CreateAPIView, UpdateAPIView, Des
                 return Response(status=200)
         return Response(status=404)
 
-    def delete(self, request, *args, **kwargs):
-        img = self.get_object()
-        if img:
-            img.deleted = True
-            img.save(update_fields=['deleted'])
-            return Response(status=200)
-        return Response(status=404)
