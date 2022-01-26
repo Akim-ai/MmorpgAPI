@@ -114,4 +114,16 @@ dmypy.json
 .pyre/
 
 # media
-media/*
+media/
+
+#secure
+config/mail_info.py
+
+#redis
+redis-6.2.6.tar.gz
+redis-6.2.6/
+*.bak
+*.fakeTxt
+*.dir
+*.dat
+*.whl

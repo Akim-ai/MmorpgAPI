@@ -5,7 +5,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db.models import Manager
 
-from .managers import CustomUserManager
+from config import settings
+from .managers import CustomUserManager, AuthManager
 
 import uuid
 from django.core.validators import FileExtensionValidator
@@ -57,12 +58,21 @@ class User(AbstractUser):
 
 
 class Auth(models.Model):
-    email = models.EmailField(max_length=150, unique=True)
-    join_date = models.DateTimeField(auto_now_add=True)
-    country = models.CharField(max_length=30, blank=True, null=True)
-    city = models.CharField(max_length=30, blank=True, null=True)
-    bio = models.TextField(max_length=2000, blank=True, null=True)
-    display_name = models.CharField(max_length=30, blank=True, null=True)
+    email = models.EmailField('Е-маил', max_length=150, unique=True, blank=False, null=False)
+    password = models.CharField("Пароль", max_length=18, blank=True, null=True)
+    country = models.CharField("Страна", max_length=30, blank=True, null=True)
+    city = models.CharField("Город", max_length=30, blank=True, null=True)
+    bio = models.TextField("Биография", max_length=2000, blank=True, null=True)
+    display_name = models.CharField(
+        'Показываемое имя', max_length=30,
+        blank=True, null=True,
+        help_text="Может быть любым, поумолчанию это имя вашей почты (Все что идет до @)."
+    )
+    is_authenticated = models.BooleanField(default=False)
+    create_date = models.DateTimeField(
+        "Дата и время создания", auto_now_add=True,
+        editable=False
+    )
 
     def __str__(self):
         return self.show_display_name
@@ -72,16 +82,26 @@ class Auth(models.Model):
         verbose_name_plural = 'Авторизованные пользователи'
 
     @property
-    def is_authenticated(self):
-        """Способ узнать был ли пользователь аутентифитирован"""
-        return True
-
-    @property
     def show_display_name(self):
         if self.display_name:
             return f'{self.display_name}'
         name = self.email.split('@')[0]
         return f'{name}'
+
+    @property
+    def auth_check(self) -> bool:
+        if self.email:
+            if self.is_authenticated:
+                return True
+            elif self.password:
+                return True
+            raise ValueError("При регистрации нужно без использования стонних сервисов пароль обязателен")
+        raise ValueError("E-mail обязателен при регистрации")
+
+    def save(self, *args, **kwargs):
+        if self.auth_check:
+            return super().save(*args, **kwargs)
+        raise Exception('Idk how u got here! *_* \nCongratz! ^0^')
 
 
 class Avatar(models.Model):
@@ -91,9 +111,9 @@ class Avatar(models.Model):
         null=True, validators=[FileExtensionValidator(allowed_extensions=['jpg']),
                                validate_size_image]
     )
-    create_date = models.DateField(
-        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
-        editable=True
+    create_date = models.DateTimeField(
+        "Дата и время создания", auto_now_add=True,
+        editable=False
     )
     deleted = models.BooleanField(default=False)
 
@@ -113,13 +133,17 @@ class Avatar(models.Model):
         self.save()
         return self
 
+    @property
+    def build_url(self):
+        return f'{settings.INDEX_URL_API}profile/avatar/{self.img}'
+
 
 class Follower(models.Model):
     user = models.ForeignKey(Auth, on_delete=models.CASCADE, related_name='owner')
     subscriber = models.ForeignKey(Auth, on_delete=models.CASCADE, related_name='subscribers')
-    create_date = models.DateField(
-        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
-        editable=True
+    create_date = models.DateTimeField(
+        "Дата и время создания", auto_now_add=True,
+        editable=False
     )
     deleted = models.BooleanField(default=False)
 
@@ -138,4 +162,3 @@ class Follower(models.Model):
         self.deleted = True
         self.save()
         return self
-

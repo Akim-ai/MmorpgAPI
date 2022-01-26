@@ -1,0 +1,29 @@
+{% extends 'parents/default.html' %}
+{% load static %}
+
+{% block style %}
+
+{% endblock style %}
+{% block style_links %}
+    <link rel="stylesheet" href="{% static 'Profile/styles/profile_me.css' %}">
+{% endblock style_links %}
+{% block title %}Profile{% endblock title %}
+
+
+{% block data %}
+    <div id="avatar_container" class="avatar_container" >
+    </div>
+    <div id="user-data" class="user_data">
+        {% block in_user_data %}
+
+        {% endblock in_user_data %}
+    </div>
+
+{% endblock data %}
+
+{% block script %}
+{% endblock script %}
+
+{% block script_links %}
+    <script src="{% static 'Profile/script/set_profile_me_data.js' %}"></script>
+{% endblock script_links %}

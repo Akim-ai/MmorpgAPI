@@ -1,0 +1,54 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    <link rel="stylesheet" href="{% static 'parents/style/style.css' %}">
+
+    {% block head %}
+
+    {% endblock head %}
+
+    <style>
+        {% block style %}
+
+        {% endblock style %}
+    </style>
+
+    {% block style_links %}{% endblock style_links %}
+
+    <title>{% block title %}{% endblock title %}</title>
+
+</head>
+
+<body id="body">
+
+{% block body %}
+{% endblock body %}
+
+<div id="data-container" class="data_container">
+    {% block data %}
+    {% endblock data %}
+</div>
+
+
+<div id="api_prefix" hidden>{{ api }}</div>
+
+<script src="{% static 'parents/script/script.js' %}"></script>
+
+
+<script>
+    {% block script %}
+    {% endblock script %}
+</script>
+
+{% block script_links %}
+
+{% endblock script_links %}
+
+</body>
+</html>

@@ -1,6 +1,8 @@
 from django.contrib.auth.base_user import BaseUserManager
 from django.utils.translation import ugettext_lazy as _
 
+from django.db.models.manager import Manager
+
 
 class CustomUserManager(BaseUserManager):
     """
@@ -32,3 +34,21 @@ class CustomUserManager(BaseUserManager):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError(_('Superuser must have is_superuser=True.'))
         return self.create_user(email, password, **extra_fields)
+
+
+class AuthManager(Manager):
+
+    def create(self, *args, **kwargs):
+        if kwargs.get('email'):
+            if kwargs.get('is_authenticated'):
+                return super().create(*args, **kwargs)
+            elif kwargs.get('password'):
+                return super().create(*args, *kwargs)
+            raise ValueError("При регистрации нужно без использования стонних сервисов пароль обязателен")
+        raise ValueError("E-mail обязателен при регистрации")
+
+    def save(self, is_authenticated: bool, *args, **kwargs):
+        if self.is_authenticated:
+            return 123
+        data = kwargs
+        return f'{kwargs}'

@@ -9,9 +9,18 @@
 <body>
 
 <div id="my-signin"></div>
+<hr>
+<form method="POST" onsubmit="login();return false">
+    {% csrf_token %}
+    <label for="e-mail">Email: <input type="text" id="e-mail" placeholder="e-mail"></label>
+    <br>
+    <label for="password">Password: <input type="text" id="password" placeholder="Password"></label>
+    <br>
+    <button type="submit" onsubmit="login();return false">submit</button>
+</form>
+<div id="answer_container"><p id="answer"></p></div>
 
-<script>
-
+<script id="google">
     function onSuccess(googleUser) {
         let profile = googleUser.getBasicProfile()
         console.log(profile.getEmail())
@@ -23,14 +32,23 @@
             headers: {'Content-type': 'application/json;charset=UTF-8'},
             body: JSON.stringify({
                 email: profile.getEmail(),
-                token: token
+                token: token,
             })
         })
             .then((res) => {
                 res = res.json()
                 return res
             })
-            .then(data => console.log(data.user_id + '\n' + data.access_token))
+            .then((data) => {
+                document.getElementById('answer').innerText = data.data
+                if (data.user_id){
+                    console.log(data.user_id)
+                }
+                if (data.access_token){
+                    localStorage.setItem('token', JSON.stringify(data.access_token))
+                    window.location.replace({% url 'profile-me' %})
+                }
+            })
     }
 
     function onFailure(error) {
@@ -47,6 +65,37 @@
             'onsuccess': onSuccess,
             'onfailure': onFailure
         });
+    }
+</script>
+
+<script id="base_auth">
+
+    function login() {
+        let email = document.getElementById('e-mail').value
+        let password = document.getElementById('password').value
+
+        fetch('http://localhost:8000/api/v1/sign-in/', {
+            method: 'POST',
+            headers: {'Content-type': 'application/json;charset=UTF-8'},
+            body: JSON.stringify({
+                email: email,
+                password: password,
+            })
+        })
+            .then((res) => {
+                res = res.json()
+                return res
+            })
+            .then((data) => {
+                document.getElementById('answer').innerText = data.data
+                if (data.user_id){
+                    console.log(data.user_id)
+                }
+                if (data.access_token){
+                    localStorage.setItem('token', JSON.stringify(data.access_token))
+                    window.location.replace({% url 'profile-me' %})
+                }
+            })
     }
 </script>
 

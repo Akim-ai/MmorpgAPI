@@ -1,9 +1,9 @@
-from django.urls import path
-from .views import UserSelfProfileView, UserProfileView, ProfileAvatar
+from django.urls import path, include
+from .views import UserProfileView, ProfileAvatar
 
 
 urlpatterns = [
-    path('me/', UserSelfProfileView.as_view(), name='my-profile'),
-    path('<int:pk>/', UserProfileView.as_view(), name='profile'),
-    path('me/avatar/<str:img>/', ProfileAvatar.as_view(), name='profile-avatar'),
+    path('<int:pk>/', UserProfileView.as_view(), name='api-profile'),
+    path('avatar/<str:img>/', ProfileAvatar.as_view(), name='api-profile-avatar'),
+    # path('announcement/', include('src.Profile.endpoints.Announcements.urls'))
 ]

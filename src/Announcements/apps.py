@@ -8,3 +8,6 @@ class AnnouncementsConfig(AppConfig):
     label = 'announcements'
 
     verbose_name = 'Объявления'
+
+    def ready(self):
+        import src.Announcements.signals

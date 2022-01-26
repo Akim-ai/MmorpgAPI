@@ -1,0 +1,48 @@
+.data_container{
+    flex-direction: column;
+}
+
+.announcement:first-child{
+}
+
+.announcement{
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+
+}
+
+.announcement:last-child{
+    margin-bottom: 0px;
+}
+
+.announcement_container{
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.announcement_stats{
+    display: flex;
+    box-sizing: border-box;
+    justify-content: space-around;
+}
+
+.announcement_create_date{
+}
+
+.announcement_category{
+}
+
+.announcement_cnt_responses{
+}
+
+.announcement_text{
+}
+
+.announcement_title{
+}
+
+.announcement_description{
+}
+
+

@@ -2,6 +2,11 @@ from datetime import timedelta
 from pathlib import Path
 import os
 
+from .mail_info import (
+    YANDEX_APP_PASSWORD,
+    YANDEX_MAIL_NAME
+)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -15,7 +20,7 @@ SECRET_KEY = 'django-insecure-t+rsb(0p)g!xhf%17u5%ajgfm6ogzr0l77ynar6*t*8z21nn=*
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -27,16 +32,23 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'src.oauth',
     'src.routers',
-    'src.Announcements',
+
+    'src.oauth.apps.OauthConfig',
+    'src.Announcements.apps.AnnouncementsConfig',
+    'src.Profile',
 
     'rest_framework',
     'drf_yasg',
     'django_filters',
 
+    'django_celery_beat',
+    'django_celery_results',
+
+    'corsheaders',
 ]
 
+CORS_ALLOW_ALL_ORIGINS = True
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -46,6 +58,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -53,7 +67,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates', ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -80,7 +94,7 @@ DATABASES = {
       'PASSWORD': 'admin',
       'HOST': 'localhost',
       'PORT': '5432',
-   }
+   },
 }
 
 
@@ -122,6 +136,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
@@ -131,10 +148,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 """Additional settings and constants"""
 
 AUTH_USER_MODEL = 'oauth.User'
+USER_EMAIL_CONFIRM_ENDPOINT = '/sing-in/email-conformation/'
+USER_EMAIL_CONFIRM_ENDPOINT_FULL = USER_EMAIL_CONFIRM_ENDPOINT + '<int:pk>/<str:token>/'
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 15,
+    'PAGE_SIZE': 30,
+
 
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'src.oauth.services.backend_auth.AuthBackend',
@@ -145,6 +165,7 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend'
     ]
+
 }
 
 """JTW"""
@@ -213,3 +234,43 @@ SWAGGER_SETTINGS = {
         }
     },
 }
+
+"""Mailling from yandex"""
+
+EMAIL_HOST = 'smtp.yandex.ru'
+EMAIL_PORT = 465
+EMAIL_HOST_USER = YANDEX_MAIL_NAME
+EMAIL_HOST_PASSWORD = YANDEX_APP_PASSWORD
+EMAIL_HOST_USER_FULL = EMAIL_HOST_USER + '@yandex.ru'
+EMAIL_USE_SSL = True
+
+
+PROTOCOL = 'http'
+DOMEN = 'localhost'
+PORT = '8000'
+INDEX_URL = f'{PROTOCOL}://{DOMEN}:{PORT}'
+
+API_AND_VERSION = 'api/v1/'
+INDEX_URL_API = f'{INDEX_URL}/{API_AND_VERSION}'
+
+EMAIL_CONFORMATION_URL_ENDPOINT = f'email-conformation/<str:token>/'
+EMAIL_CONFORMATION_URL = f'{INDEX_URL}sign-in/email-confirm/'
+
+
+"""Celery + Redis  Settings"""
+
+REDIS_HOST = 'localhost'
+REDIS_PORT = '6379'
+REDIS_RESULT = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
+REDIS_URL = REDIS_RESULT
+CELERY_BROKER_URL = REDIS_URL
+CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+CELERY_TIMEZONE = 'Europe/Moscow'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+

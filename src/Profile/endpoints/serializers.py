@@ -7,24 +7,23 @@ class AvatarField(serializers.RelatedField):
     def to_representation(self, value):
         request = self.context.get('request')
         img = value.last()
+        print(img.build_url)
         if img:
-            return request.build_absolute_uri('avatar/' + str(img))
+            return request.build_absolute_uri(img.build_url)
         return None
 
 
 class ProfileSerializer(serializers.ModelSerializer):
 
     avatar = AvatarField(many=False, read_only=True)
-    display_name = serializers.SerializerMethodField(method_name='get_display_name')
+    name = serializers.SerializerMethodField(method_name='build_username', read_only=True)
 
     class Meta:
         model = User
-        exclude = ('id', 'join_date', 'email')
+        fields = ('avatar', 'bio', 'city', 'country', 'avatar', 'name')
 
-    def get_display_name(self, instance):
-        if instance.display_name:
-            return f'{instance.display_name}'
-        return f'{instance.email}'
+    def build_username(self, instance):
+        return f'{instance.show_display_name}'
 
 
 class ProfileSelfSerializer(ProfileSerializer):
@@ -37,6 +36,11 @@ class ProfileSelfSerializer(ProfileSerializer):
 
     def announcement_responses_count(self, instance):
         return f'{AnnouncementResponse.objects.filter(user=instance).count()}'
+
+    class Meta:
+        model = User
+        exclude = ('id', 'create_date', 'email', 'is_authenticated', 'password')
+        optional_fields = '__all__'
 
 
 class UserAvatar(serializers.ModelSerializer):

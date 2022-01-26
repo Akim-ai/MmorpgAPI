@@ -1,11 +1,11 @@
+from rest_framework.reverse import reverse
+
 from ..models import Announcement, AnnouncementResponse, AnnouncementPicture
 from src.oauth.models import Auth as User
 
 from rest_framework import serializers
 
 from django.conf import settings
-
-from datetime import date
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -16,41 +16,65 @@ class CustomUserSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+TO_REPRESENTATION_CATEGORY_CHOICES = {
+    'Та': 'Танк',
+    "Хи": "Хил",
+    "ДД": "Демедж Диллер",
+    "То": "Торговец",
+    "ГМ": "Гилдмастер",
+    "Кв": "Квестгивер",
+    "Ку": "Кузнец",
+    "Ко": "Кожевник",
+    "Зе": "Зельевар",
+    "МЗ": "Мастер Заклинаний"
+}
+
+
+CREATE_CATEGORY_CHOICES = {
+    'Танк': 'Та',
+    "Хил": "Хи",
+    "Демедж Диллер": "ДД",
+    "Торговец": "То",
+    "Гилдмастер": "ГМ",
+    "Квестгивер": "Кв",
+    "Кузнец": "Ку",
+    "Кожевник": "Ко",
+    "Зельевар": "Зе",
+    "Мастер Заклинаний": "МЗ"
+}
+
+
 class AnnouncementListSerializer(serializers.ModelSerializer):
     """Announcements list serializer"""
-    category = serializers.SerializerMethodField(method_name='category_translate')
-    responses = serializers.SerializerMethodField(method_name='count_responses')
-    title = serializers.SerializerMethodField(method_name='title_slice')
-    description = serializers.SerializerMethodField(method_name='description_slice')
-    create_date = serializers.DateField(default=date.today().strftime("%Y-%m-%d"), read_only=True)
+
+    title = serializers.CharField(max_length=150)
+    description = serializers.CharField(max_length=1500)
+    category = serializers.ChoiceField(choices=CREATE_CATEGORY_CHOICES)
+    create_date = serializers.DateTimeField(format='%Y-%m-%d %H:%M', read_only=True)
 
     class Meta:
         model = Announcement
-        exclude = ['deleted', 'user']
+        exclude = ('deleted', 'user')
 
-    def category_translate(self, obj):
-        category_choices = {
-            'Та': 'Танк',
-            "Хи": "Хил",
-            "ДД": "Демедж-Диллер",
-            "То": "Торговец",
-            "ГМ": "Гилдмастер",
-            "Кв": "Квестгивер",
-            "Ку": "Кузнец",
-            "Ко": "Кожевник",
-            "Зе": "Зельевар",
-            "МЗ": "Мастер заклинаний"
-        }
-        return category_choices[f'{obj.category}']
+    def to_representation(self, instance):
 
-    def count_responses(self, obj):
-        return AnnouncementResponse.objects.filter(announcement=obj.id).count()
+        data: dict
+        data = super().to_representation(instance)
 
-    def title_slice(self, obj):
-        return f'{obj.title[:150]}'
+        data['responses'] = AnnouncementResponse.objects.filter(announcement=instance.id).count()
+        data['description'] = instance.description[:200]
+        data['category'] = TO_REPRESENTATION_CATEGORY_CHOICES[f'{instance.category}']
+        return data
 
-    def description_slice(self, obj):
-        return f'{obj.description[:200]}'
+    def create(self, validated_data):
+
+        data: dict
+        data = validated_data
+        data['category'] = CREATE_CATEGORY_CHOICES[data['category']]
+
+        data['user'] = self.context.get('user')
+
+        return Announcement.objects.create(**data)
 
 
 class AnnouncementPictureSerializer(serializers.ModelSerializer):
@@ -60,12 +84,28 @@ class AnnouncementPictureSerializer(serializers.ModelSerializer):
         fields = ['img']
 
 
+class AnnouncementRetrieveUserSerializer(serializers.ModelSerializer):
+
+    name = serializers.SerializerMethodField(method_name='user_name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ('name', 'id')
+
+    def user_name(self, instance):
+        return f'{instance.show_display_name}'
+
+
 class AnnouncementRetrieveSerializer(serializers.ModelSerializer):
     """Announcements retrieve/detail serializer"""
-    user = serializers.SlugRelatedField('show_display_name', read_only=True)
+    user = AnnouncementRetrieveUserSerializer()
     category = serializers.SerializerMethodField(method_name='category_translate')
-    pictures = serializers.SerializerMethodField(method_name='pictures_path')
-    create_date = serializers.DateField(default=date.today().strftime("%Y-%m-%d"), read_only=True)
+    # pictures = serializers.SerializerMethodField(method_name='pictures_path')
+    create_date = serializers.DateTimeField(format='%Y-%m-%d %H:%M', read_only=True)
+
+    class Meta:
+        model = Announcement
+        exclude = ('deleted',)
 
     def category_translate(self, obj):
         category_choices = {
@@ -93,10 +133,16 @@ class AnnouncementRetrieveSerializer(serializers.ModelSerializer):
             return f'{images_urls}'
         else:
             return None
-
-    class Meta:
-        model = Announcement
-        exclude = ['deleted']
+    #
+    # def create(self, validated_data):
+    #
+    #     data: dict
+    #     data = validated_data
+    #     data['category'] = CREATE_CATEGORY_CHOICES[data['category']]
+    #
+    #     data['user'] = self.context.get('user')
+    #
+    #     return Announcement.objects.create(**data)
 
 
 class AnnouncementUpdateSerializer(serializers.ModelSerializer):
@@ -110,34 +156,56 @@ class AnnouncementUpdateSerializer(serializers.ModelSerializer):
 
 class AnnouncementCreateSerializer(serializers.ModelSerializer):
 
+    id = serializers.ReadOnlyField()
+    user = serializers.SlugRelatedField('show_display_name', read_only=True)
+    category = serializers.ChoiceField(choices=CREATE_CATEGORY_CHOICES)
+
     class Meta:
         model = Announcement
-        fields = ('title', 'description', 'category', 'user')
-        requires_context = True
+        fields = ('title', 'description', 'category', 'user', 'id')
 
     def create(self, validated_data):
-        return Announcement.objects.create(**validated_data)
+
+        data: dict
+        data = validated_data
+        data['category'] = CREATE_CATEGORY_CHOICES[data['category']]
+
+        data['user'] = self.context.get('user')
+
+        return Announcement.objects.create(**data)
+
+    def to_representation(self, instance):
+
+        data = super().to_representation(instance)
+        data['category'] = TO_REPRESENTATION_CATEGORY_CHOICES[data['category']]
+
+        return data
 
 
 class AnnouncementResponseListRetrieveSerializer(serializers.ModelSerializer):
 
     user = serializers.SlugRelatedField(slug_field='show_display_name', read_only=True, required=False)
+    create_date = serializers.DateTimeField(format='%Y-%m-%d %H:%M', read_only=True)
+
     announcement = serializers.SlugRelatedField(slug_field='title', read_only=True)
-    create_date = serializers.DateField(default=date.today().strftime("%Y-%m-%d"), read_only=True)
+    announcement_url = serializers.SerializerMethodField(method_name='build_announcement_url')
 
     class Meta:
         model = AnnouncementResponse
-        exclude = ('deleted', )
+        exclude = ('deleted',)
+
+    def build_announcement_url(self, obj):
+        return f'{settings.INDEX_URL}/api/v1/announcement/{obj.id}'
 
 
 class AnnouncementResponseUpdateSerializer(AnnouncementResponseListRetrieveSerializer):
 
-    user = None
-    announcement = None
+    user = serializers.SlugRelatedField('show_display_name', read_only=True)
+    announcement = serializers.SlugRelatedField('id', read_only=True)
 
     class Meta:
         model = AnnouncementResponse
-        exclude = ('deleted', 'accepted', 'user', 'id', 'announcement', )
+        exclude = ('deleted', 'accepted', 'id', )
 
     def update(self, instance, validated_data):
         instance.text = validated_data.get('text', instance.text)
@@ -147,13 +215,19 @@ class AnnouncementResponseUpdateSerializer(AnnouncementResponseListRetrieveSeria
 
 class AnnouncementResponseCreateSerializer(serializers.ModelSerializer):
 
+    user = serializers.SlugRelatedField('show_display_name', read_only=True)
+    announcement = serializers.SlugRelatedField('id', read_only=True)
+
     class Meta:
         model = AnnouncementResponse
-        fields = ('user', 'text', 'announcement')
-        required_fields = ('user', 'announcement')
+        fields = ('text', 'user', 'announcement')
+        # exclude = ('deleted', 'accepted', 'id', )
 
     def create(self, validated_data):
-        return AnnouncementResponse.objects.create(**validated_data)
+        return AnnouncementResponse.objects.create(
+            **validated_data, user=self.context.get('user'),
+            announcement=self.context.get('announcement')
+        )
 
 
 class ResponseAcceptSerializer(serializers.ModelSerializer):

@@ -1,0 +1,13 @@
+.user_data {
+    display: inline;
+    max-height: 50%;
+    height: 50%;
+}
+
+.user_data:nth-child(n+1){
+    margin-bottom: 10px;
+}
+
+.user_data:last-child{
+    margin-bottom: 0;
+}

@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
@@ -31,5 +32,10 @@ def check_google_auth(google_user: GoogleAuth) -> dict:
     except ValueError:
         raise AuthenticationFailed(code=403, detail='Bad token Google')
 
-    user, _ = Auth.objects.get_or_create(email=google_user['email'])
+    try:
+        user, _ = Auth.objects.get_or_create(email=google_user['email'], is_authenticated=True)
+    except IntegrityError:
+        user = Auth.objects.get(email=google_user['email'])
+        user.is_authenticated = True
+        user.save()
     return create_token(user.id)

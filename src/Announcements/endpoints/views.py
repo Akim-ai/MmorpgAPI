@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend, filters
 from rest_framework.generics import (
@@ -6,7 +7,6 @@ from rest_framework.generics import (
     DestroyAPIView,
 )
 
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from utils.permissions import IsOwnerOrReadOnly, IsOwner
 
@@ -30,44 +30,51 @@ from ..models import Announcement, AnnouncementResponse, AnnouncementPicture
 from io import BytesIO
 from PIL import Image
 
+"""Filters"""
+from .filters import AnnouncementListFilter
+
 
 class AnnouncementListCreateView(ListAPIView, CreateAPIView):
     """Announcements list create view"""
 
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, ]
-    filterset_fields = ['category', 'title', 'description']
+    filterset_class = AnnouncementListFilter
 
     def get_queryset(self):
-        return Announcement.objects.all().order_by('-create_date', '-id')
+        return Announcement.objects.all()
 
     def get_serializer_class(self):
-        if self.request.method == 'GET':
-            return AnnouncementListSerializer
-        elif self.request.method == 'POST':
-            return AnnouncementCreateSerializer
+        return AnnouncementListSerializer
 
-    def get_serializer(self, *args, **kwargs):
+    def get_serializer(self, queryset, *args, **kwargs):
+
         serializer = self.get_serializer_class()
         if self.request.method == 'POST':
             data = self.request.data
-            data.pop('user')
             return serializer(
-                data={**data, 'user': self.request.user.id},
+                data={**data},
+                context={'user': self.request.user}
             )
-        serializer = serializer(data=self.get_queryset(), many=True)
+
+        serializer = serializer(data=queryset, many=True)
         if serializer.is_valid():
             return serializer
         return serializer
 
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, args, kwargs)
+        response.data['paginated_by'] = settings.REST_FRAMEWORK['PAGE_SIZE']
+        return response
+
 
 class AnnouncementDetailView(RetrieveAPIView, UpdateAPIView, DestroyAPIView):
     """Announcement Retrieve, Update, Destroy"""
-    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticated]
     serializer_class = AnnouncementRetrieveSerializer
     http_method_names = ['get', 'put', 'delete']
 
-    def get_serializer_class(self):
+    def get_serializer_class(self, *args, **kwargs):
         if self.request.method == 'GET':
             return AnnouncementRetrieveSerializer
         elif self.request.method == 'PUT':
@@ -75,20 +82,24 @@ class AnnouncementDetailView(RetrieveAPIView, UpdateAPIView, DestroyAPIView):
         else:
             raise Exception(f'Method {self.request.method} is not allowed')
 
-    def get_object(self):
+    def get_queryset(self):
         announcement = Announcement.objects.get(id=self.kwargs['pk'])
-        self.check_object_permissions(self.request, announcement)
         return announcement
+
+    def get_object(self):
+        return self.get_queryset()
 
 
 class AnnouncementResponseListCreateView(ListAPIView, CreateAPIView):
-    """Announcement Resnpose List Create View"""
+    """
+    Self Created Announcement Resnpose List Create View
+    """
 
     http_method_names = ['get', 'post']
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        responses = AnnouncementResponse.objects.filter(announcement_id=self.kwargs.get('pk'), deleted=False)
+        responses = AnnouncementResponse.objects.filter(announcement_id=self.kwargs.get('pk'))
         return responses
 
     def get_serializer_class(self):
@@ -97,19 +108,12 @@ class AnnouncementResponseListCreateView(ListAPIView, CreateAPIView):
         if self.request.method == "GET":
             return AnnouncementResponseListRetrieveSerializer
 
-    def get_serializer(self, *args, **kwargs):
-        serializer = self.get_serializer_class()
-        if self.request.method == 'POST':
-            data = self.request.data
-            data.pop('user', None)
-            data.pop('announcement', None)
-            return serializer(
-                data={**data, 'user': self.request.user.id, 'announcement': self.kwargs.get('pk')},
-                many=True
-            )
-        serializer = serializer(data=list(self.get_queryset().values()), many=True)
-        if serializer.is_valid():
-            return serializer
+    def perform_create(self, serializer):
+        AnnouncementResponse.objects.create(
+            user=self.request.user, announcement=Announcement.objects.get(id=self.kwargs.get('pk', None)),
+            text=serializer.data.get('text', None)
+        )
+        return
 
 
 class AnnouncementResponseDetailView(UpdateAPIView, RetrieveAPIView, DestroyAPIView):
@@ -127,7 +131,7 @@ class AnnouncementResponseDetailView(UpdateAPIView, RetrieveAPIView, DestroyAPIV
     def get_object(self):
         response = AnnouncementResponse.objects.get(
             id=self.kwargs['res_id'], user=self.request.user,
-            announcement_id=self.kwargs['pk']
+            announcement_id=self.kwargs.get('pk', None)
         )
         return response
 
@@ -155,7 +159,7 @@ class AnnouncementPictureView(RetrieveAPIView, CreateAPIView, UpdateAPIView, Des
 
     renderer_classes = [PNGRenderer, JPEGRenderer]
     http_method_names = ['get', 'post', 'put', 'delete']
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     image_input_formats = ['png', 'jpg', 'jpeg']
     image_min_max_height = [400, 1080]
@@ -178,7 +182,7 @@ class AnnouncementPictureView(RetrieveAPIView, CreateAPIView, UpdateAPIView, Des
         )
         if img.count() >= self.kwargs['img_num']:
             return img[self.kwargs['img_num']-1]
-        raise Exception('You not allowed for this method or there is no object.')
+        raise Exception('There is no object.')
 
     def get_serializer_class(self):
         if self.request.method == 'PUT' or self.request.method == 'POST':

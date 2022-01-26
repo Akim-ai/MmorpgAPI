@@ -7,20 +7,22 @@ from utils.managers import DefaultManager, DeletedManager
 from django.db.models import Manager
 
 
+category_choices = (
+    ('Та', 'Танк'),
+    ("Хи", "Хил"),
+    ("ДД", "Демедж Диллер"),
+    ("То", "Торговец"),
+    ("ГМ", "Гилдмастер"),
+    ("Кв", "Квестгивер"),
+    ("Ку", "Кузнец"),
+    ("Ко", "Кожевник"),
+    ("Зе", "Зельевар"),
+    ("МЗ", "Мастер Заклинаний")
+)
+
+
 class Announcement(models.Model):
     """Объявление"""
-    category_choices = (
-        ('Та', 'Танк'),
-        ("Хи", "Хил"),
-        ("ДД", "Демедж-Диллер"),
-        ("То", "Торговец"),
-        ("ГМ", "Гилдмастер"),
-        ("Кв", "Квестгивер"),
-        ("Ку", "Кузнец"),
-        ("Ко", "Кожевник"),
-        ("Зе", "Зельевар"),
-        ("МЗ", "Мастер заклинаний")
-    )
     user = models.ForeignKey(
         User, help_text='Пользователь',
         on_delete=models.CASCADE,
@@ -32,9 +34,9 @@ class Announcement(models.Model):
         "Категория", max_length=2,
         choices=category_choices
     )
-    create_date = models.DateField(
-        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
-        editable=True
+    create_date = models.DateTimeField(
+        "Дата и время создания", auto_now_add=True,
+        editable=False
     )
     deleted = models.BooleanField(default=False)
 
@@ -48,6 +50,7 @@ class Announcement(models.Model):
     class Meta:
         verbose_name = 'Объявление'
         verbose_name_plural = 'Объявления'
+        ordering = ('-create_date', )
 
     def delete(self, using=None, keep_parents=False):
         self.deleted = True
@@ -80,9 +83,9 @@ class AnnouncementPicture(models.Model):
         verbose_name="Относится к объявлению",
         related_name='pictures'
     )
-    create_date = models.DateField(
-        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
-        editable=True
+    create_date = models.DateTimeField(
+        "Дата и время создания", auto_now_add=True,
+        editable=False
     )
     deleted = models.BooleanField(default=False)
 
@@ -107,15 +110,15 @@ class AnnouncementResponse(models.Model):
     """Отклики на объявления"""
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField('Сообщение', max_length=1000)
-    accepted = models.BooleanField('Одобрен', default=False)
+    accepted = models.BooleanField('Одобрен', null=True)
     announcement = models.ForeignKey(
         Announcement, on_delete=models.CASCADE,
         verbose_name='Относится к объявлению',
         related_name='responses',
     )
-    create_date = models.DateField(
-        "Дата создания", default=datetime.utcnow().date().strftime("%Y-%m-%d"),
-        editable=True
+    create_date = models.DateTimeField(
+        "Дата и время создания", auto_now_add=True,
+        editable=False
     )
     deleted = models.BooleanField(default=False)
 
@@ -129,7 +132,7 @@ class AnnouncementResponse(models.Model):
     class Meta:
         verbose_name = 'Отклик'
         verbose_name_plural = 'Отклики'
-        ordering = ['-accepted']
+        ordering = ['-accepted', '-create_date']
 
     def delete(self, using=None, keep_parents=False):
         self.deleted = True
